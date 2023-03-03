@@ -111,13 +111,6 @@ http {
         # can reuse variable set above
         proxy_pass $<%= hash['name'] %>;
         proxy_ssl_server_name on;
-        # Adding header required for Sendgrid
-        <% if location == sendgrid_identifier %>
-          proxy_set_header 'Host' <%= HOST_FOR_SENDGRID %>;
-        <% end %>
-        <% if location == sendgrid_universal_identifier %>
-            proxy_set_header 'Host' <%= HOST_FOR_SENDGRID %>;
-        <% end %>
 
         <% %w(https).each do |scheme| %>
         proxy_redirect <%= hash["redirect_#{scheme}"] %> <%= location %>;
