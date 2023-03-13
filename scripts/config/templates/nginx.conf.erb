@@ -22,6 +22,7 @@ http {
 <% else %>
   access_log off;
 <% end %>
+
 <% if debug %>
   error_log stderr debug;
   rewrite_log on;
@@ -42,10 +43,7 @@ http {
     port_in_redirect off;
     keepalive_timeout 5;
     root <%= root %>;
-    add_header X-Frame-Options "DENY";
-    server_tokens off;
     large_client_header_buffers 4 16k;
-
   <% if error_page %>
     error_page 404 500 /<%= error_page %>;
   <% end %>
@@ -53,8 +51,14 @@ http {
     resolver <%= resolver %>;
   <% end %>
 
+  <% if basic_auth %>
+    auth_basic "Restricted";
+    auth_basic_user_file <%= basic_auth_htpasswd_path %>;
+  <% end %>
+
+    mruby_post_read_handler /app/bin/config/lib/ngx_mruby/headers.rb cache;
+
     location / {
-      mruby_post_read_handler /app/bin/config/lib/ngx_mruby/headers.rb cache;
       mruby_set $fallback /app/bin/config/lib/ngx_mruby/routes_fallback.rb cache;
     <% if clean_urls %>
       try_files $uri.html $uri $uri/ $fallback;
@@ -68,11 +72,19 @@ http {
       try_files $uri =404;
     }
   <% end %>
+
   <% if https_only %>
     if ($http_x_forwarded_proto != "https") {
       return 301 https://$host$request_uri;
     }
   <% end %>
+
+  <% if canonical_host %>
+    if ($host != <%= canonical_host %>) {
+      return 301 $http_x_forwarded_proto://<%= canonical_host %>$request_uri;
+    }
+  <% end %>
+
   <% routes.each do |route, path| %>
     location ~ ^<%= route %>$ {
       set $route <%= route %>;
@@ -92,33 +104,26 @@ http {
   }
 
   # fallback proxy named match
-  <% proxies.each do |location, hash| %>
-    set $<%= hash['name'] %> <%= hash['host'] %>;
-    location @<%= location %> {
-      rewrite ^<%= location %>/?(.*)$ <%= hash['path'] %>/$1 break;
-      # can reuse variable set above
-      proxy_pass $<%= hash['name'] %>;
-      proxy_ssl_server_name on;
-      # Adding header required for Sendgrid
-      <% if location == sendgrid_identifier %>
-        proxy_set_header 'Host' <%= host_for_sendgrid %>;
-      <% end %>
-      <% if location == sendgrid_universal_identifier %>
-          proxy_set_header 'Host' <%= host_for_sendgrid %>;
-      <% end %>
-    
-      <% %w(https).each do |scheme| %>
-      proxy_redirect <%= hash["redirect_#{scheme}"] %> <%= location %>;
-      <% end %>
-    }
-  <% end %>
+    <% proxies.each do |location, hash| %>
+      set $<%= hash['name'] %> <%= hash['host'] %>;
+      location @<%= location %> {
+        rewrite ^<%= location %>/?(.*)$ <%= hash['path'] %>/$1 break;
+        # can reuse variable set above
+        proxy_pass $<%= hash['name'] %>;
+        proxy_ssl_server_name on;
 
-  # fallback redirects named match
-  <% redirects.each do |path, hash| %>
-    location @<%= path %> {
-      return <%= hash['status'] || 301 %> <%= hash['url'] %>;
-    }
-  <% end %>
+        <% %w(https).each do |scheme| %>
+        proxy_redirect <%= hash["redirect_#{scheme}"] %> <%= location %>;
+        <% end %>
+      }
+    <% end %>
+
+    # fallback redirects named match
+    <% redirects.each do |path, hash| %>
+      location @<%= path %> {
+        return <%= hash['status'] || 301 %> <%= hash['url'] %>;
+      }
+    <% end %>
 
   }
 }
