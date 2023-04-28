@@ -9,8 +9,6 @@ class NginxConfig
     canonical_host: false,
     clean_urls: false,
     https_only: false,
-    basic_auth: false,
-    basic_auth_htpasswd_path: "/app/.htpasswd",
     worker_connections: 512,
     resolver: "8.8.8.8",
     logging: {
@@ -26,6 +24,9 @@ class NginxConfig
     json["port"] ||= ENV["PORT"] || 5000
     json["root"] ||= DEFAULT[:root]
     json["encoding"] ||= DEFAULT[:encoding]
+    
+    json["host_for_sendgrid"] = ENV["HOST_FOR_SENDGRID"]
+
 
     json["canonical_host"] ||= DEFAULT[:canonical_host]
     json["canonical_host"] = NginxConfigUtil.interpolate(json["canonical_host"], ENV) if json["canonical_host"]
@@ -50,10 +51,6 @@ class NginxConfig
 
     json["clean_urls"] ||= DEFAULT[:clean_urls]
     json["https_only"] ||= DEFAULT[:https_only]
-
-    json["basic_auth"] = true unless ENV['BASIC_AUTH_USERNAME'].nil?
-    json["basic_auth"] ||= DEFAULT[:basic_auth]
-    json["basic_auth_htpasswd_path"] ||= DEFAULT[:basic_auth_htpasswd_path]
 
     json["routes"] ||= {}
     json["routes"] = NginxConfigUtil.parse_routes(json["routes"])
